@@ -18,13 +18,13 @@ no_index:
     - t
     - inc
 requires:
+  Alien::Libevent: 0.001004
   Array::Assign: 0
   Class::XSAccessor: 1.11
   ExtUtils::H2PM: 0.08
-  LWP::UserAgent: 0
   Log::Fu: 0.25
   POE: 1.312
   POE::Sugar::Attributes: 0.02
   Test::Class: 0.36
   Test::More: 0
-version: 0.10_0
+version: 0.11_0

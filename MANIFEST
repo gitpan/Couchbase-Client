@@ -14,8 +14,6 @@ lib/Couchbase/Client/IDXConst.pm
 
 lib/Couchbase/Client/README.pod
 
-lib/Couchbase/Client/Errors_const.pm
-lib/Couchbase/Client/IDXConst_const.pm
 lib/Couchbase/Client/Compat.pm
 
 lib/Couchbase/Client/Async.pm
@@ -54,10 +52,10 @@ print_constants.pl
 
 t/00-load.t
 t/01-main.t
+t/tmp/CouchbaseMock.jar
 
 src/memcached-headers.tar.gz
-
-src/libcouchbase-1.0.0_45_g58818c5.tar.gz
-src/libvbucket-1.8.0.1_4_g677e403.tar.gz
+src/libcouchbase-1.0.0_50_g1a42d9e.tar.gz
+src/libvbucket-1.8.0.1_5_ga4397f3.tar.gz
 META.yml                                 Module YAML meta-data (added by MakeMaker)
 META.json                                Module JSON meta-data (added by MakeMaker)
