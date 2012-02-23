@@ -25,4 +25,4 @@ requires:
   POE::Sugar::Attributes: 0.02
   Test::Class: 0.36
   Test::More: 0
-version: 0.15_0
+version: 0.16_0
