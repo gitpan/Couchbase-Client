@@ -22,6 +22,7 @@
    "prereqs" : {
       "build" : {
          "requires" : {
+            "ExtUtils::CBuilder" : "0.280203",
             "ExtUtils::H2PM" : "0.08"
          }
       },
@@ -43,5 +44,5 @@
       }
    },
    "release_status" : "testing",
-   "version" : "0.16_0"
+   "version" : "0.17_0"
 }
