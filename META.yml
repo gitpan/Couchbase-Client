@@ -26,4 +26,6 @@ requires:
   POE::Sugar::Attributes: 0.02
   Test::Class: 0.36
   Test::More: 0
-version: 0.17_0
+resources:
+  repository: https://github.com/mnunberg/perl-Couchbase-Client
+version: 0.18
