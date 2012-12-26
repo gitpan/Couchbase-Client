@@ -43,11 +43,11 @@
          }
       }
    },
-   "release_status" : "testing",
+   "release_status" : "stable",
    "resources" : {
       "repository" : {
          "url" : "https://github.com/mnunberg/perl-Couchbase-Client"
       }
    },
-   "version" : "0.19_1"
+   "version" : "v1.0.0"
 }
