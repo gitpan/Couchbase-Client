@@ -1,3 +1,36 @@
+commit b8bcaf047759859215e64d66f503516285a4bc32
+Author: Mark Nunberg <mnunberg@haskalah.org>
+Date:   Wed Mar 20 19:02:01 2013 -0700
+
+    Version bump
+
+commit 69d3c3578c56447848fb969c1da8a84bf486df11
+Author: Mark Nunberg <mnunberg@haskalah.org>
+Date:   Wed Mar 20 19:00:53 2013 -0700
+
+    GH-4: Fix set_multi with single arrayref
+    
+    Previously set_multi would crash when a single arrayref was used as part
+    of the list. This fixes that issue
+
+commit e3c9f9fd03a69c5de651a7fa54fa8e36d5ce495a
+Author: Mark Nunberg <mnunberg@haskalah.org>
+Date:   Wed Dec 26 13:26:32 2012 -0800
+
+    Version bump
+
+commit 198bcd9a0a590e233933b54340e6aa08b1c1b6e3
+Author: Mark Nunberg <mnunberg@haskalah.org>
+Date:   Wed Dec 26 13:21:10 2012 -0800
+
+    GH-2: Allow stringified expiry
+
+commit a38f05534f31ad4140d67d0d11e4c07da9f53ef6
+Author: Mark Nunberg <mnunberg@haskalah.org>
+Date:   Wed Dec 19 13:52:35 2012 -0800
+
+    Fix compat mode
+
 commit 4a94bce7ea39dfae85c077b0b62a452da7fe1e82
 Author: Mark Nunberg <mnunberg@haskalah.org>
 Date:   Mon Jul 2 23:51:47 2012 -0700

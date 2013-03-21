@@ -28,4 +28,4 @@ requires:
   Test::More: 0
 resources:
   repository: https://github.com/mnunberg/perl-Couchbase-Client
-version: v1.0.0
+version: v1.0.1
