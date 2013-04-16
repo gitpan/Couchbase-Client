@@ -11,12 +11,12 @@ use Hash::Util qw(lock_keys);
 
 my $params = {
     #URL from which to download the mock JAR file for tests
-    COUCHBASE_MOCK_JARURL => 'https://github.com/downloads/mnunberg/' .
-        'perl-Couchbase-Client/CouchbaseMock-0.5-SNAPSHOT.jar',
+    COUCHBASE_MOCK_JARURL => 'http://files.couchbase.com/'.
+                            'maven2/org/couchbase/mock/CouchbaseMock/0.5-SNAPSHOT/'.
+                            'CouchbaseMock-0.5-20120726.220757-19.jar',
 
     #version numbers for libcouchbase and libvbucket
-    LIBVBUCKET_RELEASE => '1.8.0.4',
-    LIBCOUCHBASE_RELEASE => '1.0.4',
+    LIBCOUCHBASE_RELEASE => '2.0.5_2_gacffe1a',
 
     LIBEVENT_RELEASE    => '2.0.17-stable',
 };

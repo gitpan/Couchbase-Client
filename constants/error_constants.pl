@@ -23,9 +23,9 @@ my @constant_basenames = qw(
     ERANGE
     ERROR
     ETMPFAIL
+    CLIENT_ETMPFAIL
     KEY_EEXISTS
     KEY_ENOENT
-    LIBEVENT_ERROR
     NETWORK_ERROR
     NOT_MY_VBUCKET
     NOT_STORED
@@ -38,7 +38,7 @@ my @constant_basenames = qw(
     BUCKET_ENOENT
 );
 foreach my $cbase (@constant_basenames) {
-    constant('LIBCOUCHBASE_'.$cbase, name => 'COUCHBASE_'.$cbase);
+    constant('LCB_'.$cbase, name => 'COUCHBASE_'.$cbase);
 }
 
 write_output $ARGV[0];

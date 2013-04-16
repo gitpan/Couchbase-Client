@@ -2,7 +2,7 @@ package Couchbase::Client;
 
 BEGIN {
     require XSLoader;
-    our $VERSION = '1.0.1';
+    our $VERSION = '2.0.0_0';
     XSLoader::load(__PACKAGE__, $VERSION);
 }
 
@@ -12,6 +12,7 @@ use warnings;
 use Couchbase::Client::Errors;
 use Couchbase::Client::IDXConst;
 use Couchbase::Client::Return;
+use Couchbase::Client::Iterator;
 
 my $have_storable = eval "use Storable; 1;";
 my $have_zlib = eval "use Compress::Zlib; 1;";
@@ -23,6 +24,10 @@ use Array::Assign;
     *gets = \&get;
     *gets_multi = \&get_multi;
 }
+
+# Get the CouchDB (2.0) API
+use Couchbase::Couch::Base;
+use base qw(Couchbase::Couch::Base);
 
 #this function converts hash options for compression and serialization
 #to something suitable for construct()
@@ -113,65 +118,32 @@ sub _MkCtorIDX {
         warn sprintf("Unused keys (%s) in constructor",
                      join(", ", keys %$opts));
     }
+    __PACKAGE__->_CouchCtorInit(\@arglist);
     return \@arglist;
 }
 
-my %RETRY_ERRORS = (
-    COUCHBASE_NETWORK_ERROR, 1,
-    COUCHBASE_CONNECT_ERROR, 1,
-    COUCHBASE_ETIMEDOUT, 1,
-    COUCHBASE_UNKNOWN_HOST, 1
-);
-
 sub new {
     my ($pkg,$opts) = @_;
-    my $server_list;
-    if($opts->{servers}) {
-        $server_list = delete $opts->{servers};
-        if(ref $server_list ne 'ARRAY') {
-            $server_list = [$server_list];
-        }
-    } elsif ($opts->{server}) {
-        $server_list = [ delete $opts->{server} or die "server is false" ];
+    my $server_str;
+    my $server_spec = $opts->{servers} || $opts->{server};
+
+    if (ref $server_spec eq 'ARRAY') {
+        $server_str = join(";", @$server_spec);
     } else {
-        die("Must have server or servers");
+        $server_str = $server_spec;
     }
 
-    my $connected_ok;
-    my $no_init_connect = $opts->{no_init_connect};
-    my $self;
-
-    my @all_errors;
-
-    my $privopts;
-    while(!$connected_ok && (my $server = shift @$server_list)) {
-        $opts->{server} = $server;
-        $privopts = {%$opts};
-        my $arglist = _MkCtorIDX($privopts);
-        $self = $pkg->construct($arglist);
-        my $errors = $self->get_errors;
-        my $error_retriable;
-        if(scalar @$errors) {
-            push @all_errors, @$errors;
-            foreach (@$errors) {
-                my ($errno,$errstr) = @$_;
-                if(exists $RETRY_ERRORS{$errno}) {
-                    $error_retriable++;
-                }
-            }
-            if(!$error_retriable) {
-                last;
-            }
-        } else {
-            last;
-        }
-        if($no_init_connect) {
-            last;
-        }
+    if (!$server_str) {
+        die("Must have 'servers' or 'server'");
     }
-    @{$self->get_errors} = @all_errors;
+
+    my $privopts = { %$opts };
+
+    $privopts->{server} = $server_str;
+    delete $privopts->{servers};
+    my $arglist = _MkCtorIDX($privopts);
+    my $self = $pkg->construct($arglist);
     return $self;
-
 }
 
 #This is called from within C to record our stats:
@@ -248,9 +220,51 @@ Atomic CAS
         }
     }
 
+View/MapReduce Operations
+
+    # Create a design document
+
+    my $ddoc = {
+        '_id' => '_design/blog',
+        language => 'javascript',
+        views => {
+            'recent-posts' => {
+                map => 'function(d) { if(d.date) { emit(d.date, d.title); }}'
+            }
+        }
+    };
+
+    my $rv = $client->couch_design_put($ddoc);
+    if (!$rv->is_ok) {
+        # check for possible errors here..
+    }
+
+    # Now, let's load up some documents
+
+    my @posts = (
+        ["i-like-perl" => {
+            title => "Perl is cool",
+            date => "4/26/2013"
+        }],
+        ["couchbase-and-perl" => {
+            title => "Couchbase::Client is super fast",
+            date => "4/26/2013"
+        }]
+    );
+
+    # This is a convenience around set_multi. It encodes values into JSON
+    my $rvs = $client->couch_set_multi(@posts);
+
+    # Now, query the view. We use stale = 'false' to ensure consistency
+
+    $rv = $client->couch_view_slurp(['blog', 'recent-posts'], stale => 'false');
+
+    # Now dump the rows to the screen.
+    print Dumper($rv->value);
+
 =head2 DESCRIPTION
 
-<Couchbase::Client> is the client for couchbase (http://www.couchbase.org),
+C<Couchbase::Client> is the client for couchbase (http://www.couchbase.org),
 which is based partially on the C<memcached> server and the Memcache protocol.
 
 In further stages, this module will attempt to retain backwards compatibility with
@@ -562,6 +576,22 @@ If C<cas> is also specified, the deletion will only be performed if C<key> still
 maintains the same CAS value as C<cas>.
 
 
+=head3 lock(key, lock_time)
+
+Lock the key on the server for the given C<lock_time>. During this time, any
+attempts to lock the key again will fail with the error C<COUCHBASE_ETMPFAIL>.
+Attempts to modify the key via one of the mutation methods (e.g. L</set>) will
+fail with C<COUCHBASE_KEY_EEXISTS>.
+
+You may unlock the key by using L</unlock>
+
+=head3 unlock(key, cas)
+
+Unlock the key using the provided C<cas>. The CAS must be the one returned from
+the last L</lock> operation. Passing a stale CAS will fail with
+C<COUCHBASE_ETMPFAIL>; unlocking a non-locked key will also fail with
+C<COUCHBASE_ETMPFAIL>.
+
 =head2 MULTI METHODS
 
 These methods gain performance and save on network I/O by batch-enqueueing
@@ -615,6 +645,13 @@ itself:
 =head3 gets_multi
 
 alias to L</get_multi>
+
+=head3 get_iterator(@keys)
+
+Takes the same form of arguments as C<get_multi>, but returns a
+L<Couchbase::Client::Iterator> object instead of a result set. This allows you
+to do L<DBI>-style iterative fetching of results while potentially reaping
+the performance benefits of the multi protocol
 
 =head3 touch_multi([key, exp]..)
 
@@ -742,6 +779,17 @@ The return format is as so:
         ...
     }
 
+
+=head3 couch_design_put($json)
+
+=head3 couch_design_get($name)
+
+=head3 couch_view_slurp($view, $options)
+
+=head3 couch_view_iterator($view, $options)
+
+See L<Couchbase::Couch::Base> for a detailed overview of these methods
+
 =head2 SEE ALSO
 
 L<Couchbase::Client::Errors>
@@ -756,8 +804,7 @@ L<http://www.couchbase.org> - Couchbase.
 
 =head1 AUTHOR & COPYRIGHT
 
-Copyright (C) 2012 M. Nunberg
+Copyright (C) 2012, 2013 M. Nunberg
 
 You may use and distributed this software under the same terms and conditions as
 Perl itself.
-
