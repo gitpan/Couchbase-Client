@@ -63,6 +63,8 @@ xs/plcb-util.h
 xs/plcb-return.h
 xs/plcb-convert.h
 xs/plcb-commands.h
+xs/plcb-multi.h
+xs/ppport.h
 xs/typemap
 xs/lcb_10_compat.h
 
@@ -73,12 +75,12 @@ xs/ctor.c
 ################################################################################
 ### Basic C Client Support                                                   ###
 ################################################################################
+xs/args.c
 xs/Client.xs
 xs/Client_multi.xs
 xs/Iterator_get.xs
 xs/observe.c
-xs/kwargs.c
-xs/plcb-kwargs.h
+xs/plcb-args.h
 
 ################################################################################
 ### Async C Support                                                          ###
@@ -131,7 +133,7 @@ constants/print_constants.pl
 src/Makefile.PL
 src/libcouchbase.pm
 
-src/libcouchbase-2.0.5_2_gacffe1a.tar.gz
+src/libcouchbase-2.0.5_3_gedcb7f1.tar.gz
 src/libevent-2.0.17-stable.tar.gz
 META.yml                                 Module YAML meta-data (added by MakeMaker)
 META.json                                Module JSON meta-data (added by MakeMaker)

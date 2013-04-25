@@ -7,6 +7,7 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
+#include "ppport.h"
 
 
 #define PLCB_RET_CLASSNAME "Couchbase::Client::Return"
@@ -22,13 +23,7 @@
 #if IVSIZE >= 8
 #define PLCB_PERL64
 #endif
-
-#ifndef mXPUSHs
-#define mXPUSHs(sv) XPUSHs(sv_2mortal(sv))
-#endif
-
 #include "plcb-util.h"
-#include "plcb-kwargs.h"
 
 typedef struct PLCB_st PLCB_t;
 
@@ -200,12 +195,7 @@ void plcb_callbacks_set_single(PLCB_t *object);
 void plcb_observe_result(PLCB_obs_t *obs, const lcb_observe_resp_t *resp);
 
 /*options for common constructor settings*/
-void plcb_ctor_cbc_opts(AV *options,
-                        char **hostp,
-                        char **userp,
-                        char **passp,
-                        char **bucketp);
-
+void plcb_ctor_cbc_opts(AV *options, struct lcb_create_st *cropts);
 void plcb_ctor_conversion_opts(PLCB_t *object, AV *options);
 void plcb_ctor_init_common(PLCB_t *object, lcb_t instance, AV *options);
 void plcb_errstack_push(PLCB_t *object, lcb_error_t err, const char *errinfo);
@@ -234,9 +224,7 @@ int plcb_convert_settings(PLCB_t *object, int flag, int new_value);
  */
 SV* plcb_multi_iterator_new(PLCB_t *obj,
                             SV *cbo_sv,
-                            const void * const *keys,
-                            size_t *sizes,
-                            time_t *exps,
+                            const lcb_get_cmd_t * const * cmds,
                             size_t nitems);
 
 void plcb_multi_iterator_next(PLCB_iter_t *iter, SV **keyp, SV **retp);
@@ -264,10 +252,7 @@ void plcb_evloop_wait_unref(PLCB_t *obj);
 #define plcb_evloop_stop(obj) \
     (obj)->io_ops->v.v0.stop_event_loop(obj->io_ops)
 
-/**
- * Extract a set of values from an options hash.
- */
-int plcb_extract_args(HV *hash, plcb_argval_t *values);
+#include "plcb-args.h"
 
 /**
  * XS prototypes.

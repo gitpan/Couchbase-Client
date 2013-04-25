@@ -59,6 +59,7 @@ $MM_Options{CONFIGURE} = sub {
 ################################################################################
 {
     my @C_Modules = qw(
+        args
         async_base
         async_callbacks
         async_events
@@ -67,7 +68,6 @@ $MM_Options{CONFIGURE} = sub {
         ctor
         couch_handle
         iterator
-        kwargs
         observe);
     my @XS_Modules = qw(
         Client
