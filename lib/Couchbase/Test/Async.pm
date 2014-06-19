@@ -3,6 +3,7 @@ use strict;
 use warnings;
 
 use base qw(Couchbase::Test::Common);
+use base qw(POE::Sugar::Attributes);
 use Test::More;
 use Couchbase::Client::Async;
 use Couchbase::Client::Errors;
@@ -14,33 +15,21 @@ use Log::Fu;
 my $loop_session = "cbc_test_async";
 my $client_session = 'our_client';
 my $poe_kernel = 'POE::Kernel';
-my $can_async;
-my $import_err;
 
-BEGIN {
-    $can_async = eval {
-        require 'base.pm';
-        base->import('POE::Sugar::Attributes');
-        require 'Couchbase/Test/Async/Loop.pm';
-        Couchbase::Test::Async::Loop->import();
-        require 'POE/Kernel.pm';
-        POE::Kernel->import();
-
-        1;
-    };
-    $import_err = $@;
-}
+my $can_async = eval {
+    use Couchbase::Test::Async::Loop;
+    use POE::Kernel; 1;
+};
 
 if(!$can_async) {
-    __PACKAGE__->SKIP_CLASS("Can't run async tests: $import_err");
-} else {
-    $poe_kernel->run();
+    __PACKAGE__->SKIP_CLASS("Can't run async tests: $@");
 }
 
 if($^O eq 'netbsd') {
     __PACKAGE__->SKIP_CLASS("Skipping Async tests on netbsd ".
                             "due to weird kernel bug");
 }
+$poe_kernel->run();
 
 
 my $ReadyReceived = 0;
@@ -94,7 +83,7 @@ sub post_to_loop {
 sub T10_connect :Test(no_plan) {
     my $self = shift;
     $poe_kernel->run_one_timeslice() while ($ReadyReceived == 0);
-
+    
     ok($ReadyReceived, "Eventually connected..");
     ok($Errnum <= 0, "Got no errors ($Errnum)");
     if($Errnum > 0) {
@@ -113,7 +102,7 @@ sub T11_set :Test(no_plan) {
 sub T12_get :Test(no_plan) {
     my $self = shift;
     my $key = "async_key";
-
+    
     my $ret = $self->post_to_loop(get => "async_key", COUCHBASE_SUCCESS);
     is($ret->value, $self->k2v($key), "Got expected value");
 }
@@ -121,19 +110,19 @@ sub T12_get :Test(no_plan) {
 sub T14_arith_ext :Test(no_plan) {
     my $self = shift;
     my $key = "async_key";
-
+    
     my $ret;
     $self->post_to_loop(remove => [$key], -1);
-
+    
     $ret = $self->post_to_loop(
         arithmetic => [ $key, 42, undef ], COUCHBASE_KEY_ENOENT);
     is($ret->value, undef, "Didn't get value for missing initial value");
-
+    
     $ret = $self->post_to_loop(
         arithmetic => [ $key, 9999, 42 ], COUCHBASE_SUCCESS);
-
+        
     is($Return->value, 42, "Initial value set via arithmetic");
-
+        
 }
 
 1;

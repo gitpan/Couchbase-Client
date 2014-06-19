@@ -22,8 +22,6 @@
    "prereqs" : {
       "build" : {
          "requires" : {
-            "Archive::Extract" : 0,
-            "Archive::Tar" : 0,
             "ExtUtils::CBuilder" : "0.280203",
             "ExtUtils::H2PM" : "0.08"
          }
@@ -38,16 +36,18 @@
          "requires" : {
             "Array::Assign" : 0,
             "Class::XSAccessor" : "1.11",
-            "JSON" : "2.53",
-            "JSON::SL" : "v1.0.1"
+            "POE" : "1.312",
+            "POE::Sugar::Attributes" : "0.02",
+            "Test::Class" : "0.36",
+            "Test::More" : 0
          }
       }
    },
-   "release_status" : "testing",
+   "release_status" : "stable",
    "resources" : {
       "repository" : {
          "url" : "https://github.com/mnunberg/perl-Couchbase-Client"
       }
    },
-   "version" : "v2.0.0_1"
+   "version" : "v1.0.2"
 }

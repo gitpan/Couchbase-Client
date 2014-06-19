@@ -3,10 +3,12 @@ use strict;
 use warnings;
 use File::ShareDir;
 
-our $VERSION = '2.0.5';
+our $VERSION = '1.0.4';
 
 __END__
 
 =head1 NAME
 
 Couchbase::libcouchbase - heavy lifting for libcouchbase shared object dependencies
+
+

@@ -2,7 +2,7 @@ package Couchbase::Client;
 
 BEGIN {
     require XSLoader;
-    our $VERSION = '2.0.0_1';
+    our $VERSION = '1.0.2';
     XSLoader::load(__PACKAGE__, $VERSION);
 }
 
@@ -12,7 +12,6 @@ use warnings;
 use Couchbase::Client::Errors;
 use Couchbase::Client::IDXConst;
 use Couchbase::Client::Return;
-use Couchbase::Client::Iterator;
 
 my $have_storable = eval "use Storable; 1;";
 my $have_zlib = eval "use Compress::Zlib; 1;";
@@ -23,15 +22,7 @@ use Array::Assign;
     no warnings 'once';
     *gets = \&get;
     *gets_multi = \&get_multi;
-    *gets_multi_A = \&get_multi_A;
-
-    *delete_multi = \&remove_multi;
-    *delete_multi_A = \&remove_multi_A;
 }
-
-# Get the CouchDB (2.0) API
-use Couchbase::Couch::Base;
-use base qw(Couchbase::Couch::Base);
 
 #this function converts hash options for compression and serialization
 #to something suitable for construct()
@@ -122,32 +113,65 @@ sub _MkCtorIDX {
         warn sprintf("Unused keys (%s) in constructor",
                      join(", ", keys %$opts));
     }
-    __PACKAGE__->_CouchCtorInit(\@arglist);
     return \@arglist;
 }
 
+my %RETRY_ERRORS = (
+    COUCHBASE_NETWORK_ERROR, 1,
+    COUCHBASE_CONNECT_ERROR, 1,
+    COUCHBASE_ETIMEDOUT, 1,
+    COUCHBASE_UNKNOWN_HOST, 1
+);
+
 sub new {
     my ($pkg,$opts) = @_;
-    my $server_str;
-    my $server_spec = $opts->{servers} || $opts->{server};
-
-    if (ref $server_spec eq 'ARRAY') {
-        $server_str = join(";", @$server_spec);
+    my $server_list;
+    if($opts->{servers}) {
+        $server_list = delete $opts->{servers};
+        if(ref $server_list ne 'ARRAY') {
+            $server_list = [$server_list];
+        }
+    } elsif ($opts->{server}) {
+        $server_list = [ delete $opts->{server} or die "server is false" ];
     } else {
-        $server_str = $server_spec;
+        die("Must have server or servers");
     }
 
-    if (!$server_str) {
-        die("Must have 'servers' or 'server'");
+    my $connected_ok;
+    my $no_init_connect = $opts->{no_init_connect};
+    my $self;
+
+    my @all_errors;
+
+    my $privopts;
+    while(!$connected_ok && (my $server = shift @$server_list)) {
+        $opts->{server} = $server;
+        $privopts = {%$opts};
+        my $arglist = _MkCtorIDX($privopts);
+        $self = $pkg->construct($arglist);
+        my $errors = $self->get_errors;
+        my $error_retriable;
+        if(scalar @$errors) {
+            push @all_errors, @$errors;
+            foreach (@$errors) {
+                my ($errno,$errstr) = @$_;
+                if(exists $RETRY_ERRORS{$errno}) {
+                    $error_retriable++;
+                }
+            }
+            if(!$error_retriable) {
+                last;
+            }
+        } else {
+            last;
+        }
+        if($no_init_connect) {
+            last;
+        }
     }
-
-    my $privopts = { %$opts };
-
-    $privopts->{server} = $server_str;
-    delete $privopts->{servers};
-    my $arglist = _MkCtorIDX($privopts);
-    my $self = $pkg->construct($arglist);
+    @{$self->get_errors} = @all_errors;
     return $self;
+
 }
 
 #This is called from within C to record our stats:
@@ -224,51 +248,9 @@ Atomic CAS
         }
     }
 
-View/MapReduce Operations
-
-    # Create a design document
-
-    my $ddoc = {
-        '_id' => '_design/blog',
-        language => 'javascript',
-        views => {
-            'recent-posts' => {
-                map => 'function(d) { if(d.date) { emit(d.date, d.title); }}'
-            }
-        }
-    };
-
-    my $rv = $client->couch_design_put($ddoc);
-    if (!$rv->is_ok) {
-        # check for possible errors here..
-    }
-
-    # Now, let's load up some documents
-
-    my @posts = (
-        ["i-like-perl" => {
-            title => "Perl is cool",
-            date => "4/26/2013"
-        }],
-        ["couchbase-and-perl" => {
-            title => "Couchbase::Client is super fast",
-            date => "4/26/2013"
-        }]
-    );
-
-    # This is a convenience around set_multi. It encodes values into JSON
-    my $rvs = $client->couch_set_multi(@posts);
-
-    # Now, query the view. We use stale = 'false' to ensure consistency
-
-    $rv = $client->couch_view_slurp(['blog', 'recent-posts'], stale => 'false');
-
-    # Now dump the rows to the screen.
-    print Dumper($rv->value);
-
 =head2 DESCRIPTION
 
-C<Couchbase::Client> is the client for couchbase (http://www.couchbase.org),
+<Couchbase::Client> is the client for couchbase (http://www.couchbase.org),
 which is based partially on the C<memcached> server and the Memcache protocol.
 
 In further stages, this module will attempt to retain backwards compatibility with
@@ -487,17 +469,11 @@ object.
 If the key is not found on the server, the returned object's C<errnum> field
 will be set to C<COUCHBASE_KEY_ENOENT>
 
-=head3 append(key, value_to_append, [ , expiry] )
+=head3 append
 
-=head3 append(key, value_to_append, { cas => $cas, exp => $expiry })
-
-=head3 prepend(key, value_to_prepend, [ , expiry ])
-
-=head3 prepend(key, value_to_prepend, { cas => $cas, exp => $expiry })
+=head3 prepend
 
 =head3 set(key, value [,expiry])
-
-=head3 set(key, value, { cas => $cas, exp => $expiry })
 
 Attempts to set, prepend, or append the value of the key C<key> to C<value>,
 optionally setting an expiration time of C<expiry> seconds in the future.
@@ -505,8 +481,6 @@ optionally setting an expiration time of C<expiry> seconds in the future.
 Returns an L<Couchbase::Client::Return> object.
 
 =head3 add(key, value [,expiry])
-
-=head3 add(key, value, { exp => $expiry })
 
 Store the value on the server, but only if the key does not already exist.
 
@@ -517,13 +491,10 @@ See L</set> for explanation of arguments.
 
 =head3 replace(key, value [,expiry])
 
-=head3 replace(key, value, { cas => $cas, exp => $expiry })
-
 Replace the value stored under C<key> with C<value>, but only
 if the key does already exist on the server.
 
 See L</get> for possible errors, and L</set> for argument description.
-
 
 
 =head3 gets(key)
@@ -531,8 +502,6 @@ See L</get> for possible errors, and L</set> for argument description.
 This is an alias to L</get>. The CAS value is returned on any C<get> operation.
 
 =head3 cas(key, value, cas, [,expiry])
-
-=head3 cas(key, value, cas, { exp => $expiry })
 
 Tries to set the value of C<key> to C<value> but only if the opaque C<cas> is
 equal to the CAS value on the server.
@@ -550,8 +519,6 @@ Modifies the expiration time of C<key> without fetching or setting it.
 
 =head3 arithmetic(key, delta, initial [,expiry])
 
-=head3 arithmetic(key, delta, { exp => $expiry })
-
 Performs an arithmetic operation on the B<numeric> value stored in C<key>.
 
 The value will be added to C<delta> (which may be a negative number, in which
@@ -562,27 +529,18 @@ if it does not yet exist.
 
 =head3 incr(key [,delta])
 
-=head3 incr(key, { delta => $delta, initial => $initial, exp => $expiry })
-
 =head3 decr(key [,delta])
-
-=head3 decr(key, { delta => $delta, initial => $initial, exp => $expiry })
 
 Increments or decrements the numeric value stored under C<key>, if it exists.
 
 If delta is specified, it is the B<absolute> value to be added to or subtracted
 from the value. C<delta> defaults to 1.
 
-If C<initial> is specified, it will be initialized to this value if the key does
-not exist (and C<delta> is ignored).
-
 These two functions are equivalent to doing:
 
     $delta ||= 1;
     $delta = -$delta if $decr;
     $o->arithmetic($key, $delta, undef);
-
-If C<initial> is used
 
 =head4 NOTE ABOUT 32 BIT PERLS
 
@@ -598,29 +556,11 @@ deal with 64 bit integers.
 
 =head3 remove(key [,cas])
 
-=head3 remove(key, { cas => $cas })
-
 These two functions are identical. They will delete C<key> on the server.
 
 If C<cas> is also specified, the deletion will only be performed if C<key> still
 maintains the same CAS value as C<cas>.
 
-
-=head3 lock(key, lock_time)
-
-Lock the key on the server for the given C<lock_time>. During this time, any
-attempts to lock the key again will fail with the error C<COUCHBASE_ETMPFAIL>.
-Attempts to modify the key via one of the mutation methods (e.g. L</set>) will
-fail with C<COUCHBASE_KEY_EEXISTS>.
-
-You may unlock the key by using L</unlock>
-
-=head3 unlock(key, cas)
-
-Unlock the key using the provided C<cas>. The CAS must be the one returned from
-the last L</lock> operation. Passing a stale CAS will fail with
-C<COUCHBASE_ETMPFAIL>; unlocking a non-locked key will also fail with
-C<COUCHBASE_ETMPFAIL>.
 
 =head2 MULTI METHODS
 
@@ -667,63 +607,20 @@ itself:
     $o->set(map{ [$h->{key}, $h->{value}] });
 
 
-As a convenience, if your argument list is in the form of an arrayref, rather
-than a simple array, you can use the more efficient C<*_multi_A> calls. These
-calls work just like the C<*_multi> variants, except that they only accept a
-single argument which is an arrayref of "argument -ntuples".
-
-Therefore, suppose you have a data structure which looks like this
-
-    my $set_args = [ ["key1", "value1"], ["key2", "value2"] ]
-
-You can now do
-
-    my $rvs = $o->set_multi_A($set_args);
-
-rather than
-
-    my $rvs = $o->set_multi(@$set_args);
-
-This is more efficient as the argument list is wrapped internally into an array
-reference anyway.
-
-
-For functions which only require a key, you may pass a list of keys to the
-function, thus not requiring each key to be a single-element array ref. Likewise,
-the C<*_multi_A> variant can accept an array ref of keys.
-
 
 =head3 get_multi(@keys)
 
-=head3 get_multi([$key1], [$key2])
-
-=head3 get_multi_A([[$key1], [$key2]])
+=head3 get_multi(\@keys)
 
 =head3 gets_multi
 
 alias to L</get_multi>
 
-=head3 get_iterator(@keys)
-
-=head3 get_iterator([$key1], [$key2])
-
-=head3 get_iterator_A(\@keys)
-
-=head3 get_iterator_A([[$key1], [$key2]])
-
-Takes the same form of arguments as C<get_multi>, but returns a
-L<Couchbase::Client::Iterator> object instead of a result set. This allows you
-to do L<DBI>-style iterative fetching of results while potentially reaping
-the performance benefits of the multi protocol
-
 =head3 touch_multi([key, exp]..)
-
-=head3 touch_multi_A([[key, exp], ...])
 
 
 =head3 set_multi([key => value, ...], [key => value, ...])
 
-=head3 set_multi_A([[key => value], ...])
 
 Performs multiple set operations on a multitude of keys. Input parameters are
 array references. The contents of these array references follow the same
@@ -736,61 +633,19 @@ future. C<bar> is set to C<bar_value>, without any expiry.
 
 =head3 cas_multi([key => value, $cas, ...])
 
-=head3 cas_multi_A([[key => value, $cas], ...])
-
 Multi version of L</cas>
 
 =head3 arithmetic_multi([key => $delta, ...])
-
-=head3 arithmetic_multi_A([[key => $delta, ...], ...])
 
 Multi version of L</arithmetic>
 
 =head3 incr_multi(@keys)
 
-=head3 incr_multi([$key, $options], ...)
-
-=head3 incr_multi_A(\@keys)
-
-=head3 incr_multi_A([[$key, $options], ...])
-
-Multi version of L</incr>
-
-
 =head3 decr_multi(@keys)
 
-=head3 decr_multi([$key, $options], ...)
+=head3 incr_multi( [key, amount], ... )
 
-=head3 decr_multi_A(\@keys)
-
-=head3 decr_multi_A([[$key, $options], ...])
-
-Multi version of L</decr>
-
-
-=head3 remove_multi(@keys)
-
-=head3 remove_multi([$key, $options], ...)
-
-=head3 remove_multi_A(\@keys)
-
-=head3 remove_multi_A([[$key, $options], ...])
-
-Multi version of L</remove>
-
-
-=head3 unlock_multi([$key, $cas], ...)
-
-=head3 unlock_multi_A([[$key, $cas]])
-
-Multi version of L</unlock>
-
-
-=head3 lock_multi([$key, $timeout], ...)
-
-=head3 lock_multi_A([[$key, $timeout, ...]])
-
-Multi version of L</lock>
+=head3 decr_multi( [key, amount], ... )
 
 
 =head2 RUNTIME SETTINGS
@@ -887,20 +742,6 @@ The return format is as so:
         ...
     }
 
-
-=head2 VIEW QUERY METHODS
-
-
-=head3 couch_design_put($json)
-
-=head3 couch_design_get($name)
-
-=head3 couch_view_slurp($view, $options)
-
-=head3 couch_view_iterator($view, $options)
-
-See L<Couchbase::Couch::Base> for a detailed overview of these methods
-
 =head2 SEE ALSO
 
 L<Couchbase::Client::Errors>
@@ -915,7 +756,8 @@ L<http://www.couchbase.org> - Couchbase.
 
 =head1 AUTHOR & COPYRIGHT
 
-Copyright (C) 2012, 2013 M. Nunberg
+Copyright (C) 2012 M. Nunberg
 
 You may use and distributed this software under the same terms and conditions as
 Perl itself.
+

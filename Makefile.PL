@@ -18,9 +18,10 @@ $ENV{LD_RUN_PATH} ||= "";
 
 #$Verbose = 99;
 
+our $Bundled = 0;
 GetOptions(
     'dynamic' => \my $UseDynamic,
-    'bundled' => \my $UseBundled,
+    'bundled' => \$Bundled,
     'incpath=s' => \our $U_IncPath,
     'libpath=s' => \our $U_LibPath
 ) or die <<EOD;
@@ -59,21 +60,8 @@ $MM_Options{CONFIGURE} = sub {
 ################################################################################
 {
     my @C_Modules = qw(
-        args
-        async_base
-        async_callbacks
-        async_events
-        callbacks
-        convert
-        ctor
-        couch_handle
-        iterator
-        observe);
-    my @XS_Modules = qw(
-        Client
-        Client_multi
-        Iterator_get
-        Couch_request_handle);
+        callbacks convert ctor async_base async_callbacks async_events);
+    my @XS_Modules = qw(Client Client_multi);
 
     foreach (@XS_Modules, @C_Modules) {
         my $obj = $_ . $Config{obj_ext};
@@ -108,9 +96,6 @@ if($ENV{PLCB_BUILD_AUTHOR}) {
     $MM_Options{OPTIMIZE} = '-Wdeclaration-after-statement -Werror -std=gnu89';
 }
 
-# Extra stuff - add compiler flags here
-# $MM_Options{OPTIMIZE} .= ' -Wall';
-
 ################################################################################
 ### Check for Java                                                           ###
 ################################################################################
@@ -123,7 +108,7 @@ if(!$HaveJava) {
         "module will likely function properly without it, but will be untested\n".
         "on your specific installation.\n\n".
         "Abort installation?", "n");
-
+    
     if($promptval =~ /^y/i) {
         print STDERR "You have request to abort the installation.\n".
                         "Makefile.PL will now exit\n";
@@ -158,35 +143,25 @@ WriteMakefile(
 
     BUILD_REQUIRES => {
         'ExtUtils::H2PM'    => 0.08,
-
+        
         #This is really a dependency of ExtUtils::H2PM, but we need a
         #version which honors the CFLAGS environment variable.
-        'ExtUtils::CBuilder' => 0.280203,
-
-        #Need this to extract tarballs
-        'Archive::Extract' => 0,
-        'Archive::Tar' => 0,
+        'ExtUtils::CBuilder' => 0.280203
     },
 
     PREREQ_PM => {
         'Array::Assign'     => 0,
         'Class::XSAccessor' => 1.11,
+        'Test::More'        => 0,
 
-        'JSON'              => 2.53,
-        'JSON::SL'          => '1.0.1'
-    },
-
-    TEST_REQUIRES => {
         #These modules are needed for tests, but not strictly required for
         #functionality
 
-        'Test::More'        => 0,
         'Test::Class'       => 0.36,
-
+        
         #these are needed for asynchronous tests and modules
         'POE::Sugar::Attributes' => 0.02,
         'POE'               => 1.312,
-
     },
 
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
@@ -219,7 +194,7 @@ sub const_cccmd {
 
 sub libscan {
     my ($self,$path) = @_;
-    if($path =~ /\.pl$/i || $path =~ /PLCB_Conf/ || $path =~ /HACKING/) {
+    if($path =~ /\.pl$/i || $path =~ /PLCB_Conf/) {
         return "";
     } else {
         return $path;

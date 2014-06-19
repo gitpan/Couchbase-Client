@@ -16,12 +16,6 @@ use Cwd qw(abs_path);
 
 use lib (__DIR__ . '/..');
 
-sub chomp_arch {
-    my $s = shift;
-    $s =~ s/-arch\s+[^\s]+//g;
-    return $s;
-}
-
 my $Sharepath = File::Spec->catfile(
     'auto', 'share', 'dist', 'Couchbase-Client', 'Library');
 
@@ -51,8 +45,8 @@ my %MM_Options = (
 
 my $LIBCOUCHBASE_CFUNC = <<'EOC';
 unsigned int version = 0;
-(void)lcb_get_version(&version);
-if(version >= 0x020000) {
+(void)libcouchbase_get_version(&version);
+if(version >= 0x010001) {
     return 0;
 }
 return 1;
@@ -81,16 +75,20 @@ EOC
 sub check_dependency {
     my ($names,$fn,%extra) = @_;
     $names = ref $names ? $names : [ $names ];
-
+    
     print STDERR "\nChecking for @{$names}...\n";
     local %ENV = %ENV;
+    
+    if ($PLCBTopLevel::Bundled) {
+        return 0;
+    }
 
     foreach my $libname (@$names) {
         my (undef,undef,$ldargs,$runpath,$sofile) =
             ExtUtils::Liblist->ext("$SEARCHPATH_S -l$libname", 0, 1);
 
         next unless ($sofile && ($sofile = $sofile->[0]) );
-
+        
         print STDERR "\tfound shared object: $sofile \n";
         my %cl_opts = (
             %CHECKLIB_OPTIONS,
@@ -135,30 +133,30 @@ sub create_buildscript_invocation {
     my ($mm,$build,$install,$deps) = @_;
 
     #mm is the parent Makefile, here
-
+    
     # we need to make sure our flags match whatever Devel::CheckLib might have
     # used to determine an available dependency:
-
+    
     my $script_cppflags = $mm->{INC};
-    my $config_ccflags = chomp_arch($Config{ccflags});
-
+    my $config_ccflags = $Config{ccflags};
+    
     # Strip any -D's, -f's, -g, and -O from the flags. and remove -pthread
-
+    
     $config_ccflags =~ s/-(?:D|f|O|M|g)\S+//g;
-
+    
     #string excessive whitespace:
     $config_ccflags =~ s/\s+/ /g;
-
+    
     $script_cppflags .= ' ' . $config_ccflags;
-
-
+    
+    
     $PLCBTopLevel::U_LibPath ||= "";
-
+    
     my $script_ldflags = $mm->{LDLOADLIBS} . ' ' . $PLCBTopLevel::U_LibPath .
-        ' ' . chomp_arch($Config{ldflags});
-
+        ' ' . $Config{ldflags};
+    
     my $java_arg = $PLCBTopLevel::HaveJava ? "--have-java" : "";
-
+    
     my @lines = (
 
         #begin long commandline invocation:
@@ -230,10 +228,6 @@ sub mangle_parent_makefile {
         $ret = join("\n",
             "\$(MYEXTLIB) ::",
             "\t\ " . $mm->cd("src", '$(MAKE)'),
-            "",
-            '$(OBJECT) : $(MYEXTLIB)',
-            "",
-            'pm_to_blib : $(MYEXTLIB)',
         ) . $ret;
 
         return $ret;
@@ -261,10 +255,6 @@ sub mangle_parent_makefile {
 
     $parent->{INC} .= " -I$blib_dep_path\$(DFSEP)include";
 
-    my $couchbase_h = File::Spec->catfile($blib_dep_path,
-                                          "include",
-                                          "libcouchbase",
-                                          "couchbase.h");
 
     my $parent_inc = $parent->{INC};
 
@@ -272,10 +262,7 @@ sub mangle_parent_makefile {
                                $parent_inc);
     no warnings qw(redefine once);
     *MY::postamble = sub {
-        my @lines;
-
-        # Insert header file dependency for $(OBJECT)
-        push @lines, (
+        my @lines = (
             "$dep:",
             (insert_announcement("will build for ultimate target $dep")),
             (create_buildscript_invocation($parent,
@@ -306,13 +293,13 @@ sub MM_Configure {
 
     if($ENV{PLCB_BUILD_ALL}) {
         log_err('build_all reuqested');
-        @to_build = qw(COUCHBASE EVENT);
+        @to_build = qw(VBUCKET COUCHBASE EVENT);
         goto GT_MANGLE;
     }
-
+    
     printf STDERR ("\nWill run a few test programs to see ".
                    "if depencies are required\n");
-
+    
     my $have_libcouchbase =
         check_dependency('couchbase',$LIBCOUCHBASE_CFUNC,
             header => ['sys/types.h', 'libcouchbase/couchbase.h'] );
@@ -320,14 +307,13 @@ sub MM_Configure {
     if($have_libcouchbase) {
         return $h; #nothing to do here.
     } else {
-        push @to_build, qw(COUCHBASE);
+        push @to_build, qw(COUCHBASE VBUCKET);
     }
 
     if(!check_dependency(
         'event', $LIBEVENT_CFUNC, header => ['event.h', 'stdio.h'] )) {
         push @to_build, 'EVENT';
     }
-
 
     GT_MANGLE:
     my $errmsg = "\n".
@@ -341,13 +327,13 @@ sub MM_Configure {
                 "\n".
                 "Install bundled libraries?";
     my $promptval = prompt($errmsg, "y");
-
+    
     if($promptval !~ /^y/i) {
         print STDERR "You have selected not to build and install the bundled\n".
                     "dependencies. Couchbase::Client will not be built\n";
         exit(0);
     }
-
+    
     print STDERR "Will build: @to_build\n\n...";
     mangle_parent_makefile($parent, \@to_build);
 

@@ -15,8 +15,6 @@ use Class::XSAccessor::Array {
 };
 
 sub is_ok {
-    die "GRRR" unless defined $_[0]->[RETIDX_ERRNUM];
-    #warn "Checking defined errno";
     $_[0]->[RETIDX_ERRNUM] == COUCHBASE_SUCCESS;
 }
 
@@ -24,9 +22,8 @@ sub is_ok {
     no strict 'refs';
     foreach my $errsym (@Couchbase::Client::Errors::EXPORT) {
         my $subname = $errsym;
-        my $wanted = &{$errsym}();
         $subname =~ s/COUCHBASE_//g;
-        *{$subname} = sub { $_[0]->errnum == $wanted };
+        *{$subname} = sub { $_[0]->errnum == $_[1] };
     }
 }
 

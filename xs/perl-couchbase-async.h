@@ -3,10 +3,9 @@
 
 #include "perl-couchbase.h"
 #include <perlio.h>
-#include "plcb-commands.h"
 
-typedef void(*plcba_c_evhandler)(lcb_socket_t, short, void*);
-typedef struct lcb_io_opt_st plcba_cbcio;
+typedef void(*plcba_c_evhandler)(libcouchbase_socket_t, short, void*);
+typedef struct libcouchbase_io_opt_st plcba_cbcio;
 
 
 /*two layered approach:
@@ -108,7 +107,7 @@ struct PLCBA_c_event_st {
     short flags;
     PLCBA_evstate_t state;
     /*FD from libcouchbase*/
-    lcb_socket_t fd;
+    libcouchbase_socket_t fd;    
 };
 
 
@@ -183,6 +182,42 @@ typedef enum {
     
 } PLCBA_ctoridx_t;
 
+/*Types of commands we currently handle*/
+
+#define plcba_cmd_needs_key(cmd) \
+    (cmd < PLCBA_CMD_MISC)
+
+#define plcba_cmd_needs_conversion(cmd) \
+    (cmd & (PLCBA_CMD_SET|PLCBA_CMD_ADD))
+
+#define plcba_cmd_needs_strval(cmd) \
+    (cmd & (PLCBA_CMD_SET \
+        |PLCBA_CMD_REPLACE|PLCBA_CMD_APPEND|PLCBA_CMD_PREPEND))
+
+typedef enum {
+    PLCBA_CMD_GET = 0x1,
+    
+    /*'clean' mutators*/
+    PLCBA_CMD_SET = 0x2,
+    PLCBA_CMD_ADD = 0x4,
+    
+    /*'dirty' mutators*/
+    PLCBA_CMD_REPLACE = 0x8,
+    PLCBA_CMD_APPEND = 0x10,
+    PLCBA_CMD_PREPEND = 0x12,
+    
+    /*simple key operations*/
+    PLCBA_CMD_REMOVE = 0x20,
+    PLCBA_CMD_TOUCH = 0x30,
+    
+    /*arithmetic*/
+    PLCBA_CMD_ARITHMETIC = 0x100,
+    
+    PLCBA_CMD_MISC,
+    PLCBA_CMD_STATS,
+    PLCBA_CMD_FLUSH,
+} PLCBA_cmd_t;
+
 /*Fields for the 'request' object*/
 typedef enum {
     PLCBA_REQIDX_KEY,
@@ -228,14 +263,14 @@ plcba_cbcio *plcba_make_io_opts(PLCBA_t *async);
 void plcba_callback_notify_err(PLCBA_t *async,
                                PLCBA_cookie_t *cookie,
                                const char *key, size_t nkey,
-                               lcb_error_t err);
+                               libcouchbase_error_t err);
 
 
 /*prototypes for perl-facing functions, for Async.xs*/
 SV *PLCBA_construct(const char*, AV*);
 void PLCBA_connect(SV*);
 void PLCBA_HaveEvent(const char*, short, SV*);
-void PLCBA_request2(SV *self, int cmd, SV *cmdargs, HV *cbargs);
+void PLCBA_request(SV *, int, int, SV*, SV*, int, AV*);
 
 
 #endif /* PERL_COUCHBASE_ASYNC_H_ */
