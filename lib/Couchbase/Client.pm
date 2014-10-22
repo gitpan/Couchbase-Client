@@ -2,7 +2,7 @@ package Couchbase::Client;
 
 BEGIN {
     require XSLoader;
-    our $VERSION = '1.0.2';
+    our $VERSION = '1.0.3';
     XSLoader::load(__PACKAGE__, $VERSION);
 }
 
@@ -189,6 +189,11 @@ __END__
 =head1 NAME
 
 Couchbase::Client - Perl Couchbase Client
+
+B<This module is no longer maintained. Use the> L<Couchbase> B<module instead>
+
+B<This is for the OLDER client library. The new library is simply called>
+L<Couchbase>.
 
 =head1 README
 

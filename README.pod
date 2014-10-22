@@ -2,6 +2,9 @@
 
 Couchbase::Client::README - README for Couchbase::Client
 
+B<This is for the OLDER client library. The new library is simply called>
+L<Couchbase>.
+
 =head1 Introduction
 
 Couch::Couchbase is a Perl client for Couchbase (http://www.couchbase.org).
